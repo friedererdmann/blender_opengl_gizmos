@@ -8,6 +8,7 @@ def helper_shader():
         void main()
         {
             vec4 Position = viewProjectionMatrix * vec4(pos, 1.0f);
+            gl_Position = Position;
             ec_pos = Position.xyz;
         }
     '''

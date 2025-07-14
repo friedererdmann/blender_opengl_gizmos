@@ -31,7 +31,7 @@ def draw_callback_px(self, context):
     gpu.state.depth_mask_set(True)
     gpu.state.blend_set("ADDITIVE")
     gpu.state.front_facing_set(True)
-    gpu.state.face_culling_set("BACK")
+    gpu.state.face_culling_set("NONE")
     shader = gizmo_helpers.helper_shader()
     matrix = bpy.context.region_data.perspective_matrix
     
