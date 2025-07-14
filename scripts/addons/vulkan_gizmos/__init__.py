@@ -1,8 +1,6 @@
 import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
-import bgl
-import blf
 from . import gizmo_helpers
 
 bl_info = { # pylint: disable=invalid-name
@@ -17,18 +15,29 @@ bl_info = { # pylint: disable=invalid-name
 def add_to_viewports():
     """Call the operator to add geometry to viewports"""
     for area in bpy.context.screen.areas:
-        if area.type == 'VIEW_3D':
-            bpy.ops.opengl.helper_gizmos({'area': area}, 'INVOKE_DEFAULT')
-            break
+        if area.type != 'VIEW_3D':
+            continue
+        with bpy.context.temp_override(area=area):
+            bpy.ops.opengl.helper_gizmos('INVOKE_DEFAULT')
+        break
 
 def draw_callback_px(self, context):
     """Callback Method for frame rendering"""
-    bgl.glEnable(bgl.GL_DEPTH_TEST)
-    bgl.glEnable(bgl.GL_BLEND)
-    bgl.glCullFace(bgl.GL_FRONT)
-    bgl.glEnable(bgl.GL_CULL_FACE)
+    # bgl.glEnable(bgl.GL_DEPTH_TEST)
+    # bgl.glEnable(bgl.GL_BLEND)
+    # bgl.glCullFace(bgl.GL_FRONT)
+    # bgl.glEnable(bgl.GL_CULL_FACE)
+    gpu.state.depth_test_set("LESS_EQUAL")
+    gpu.state.depth_mask_set(True)
+    gpu.state.blend_set("ADDITIVE")
+    gpu.state.front_facing_set(True)
+    gpu.state.face_culling_set("BACK")
     shader = gizmo_helpers.helper_shader()
-    shader.bind()
+    matrix = bpy.context.region_data.perspective_matrix
+    
+    
+    
+    
 
     batches = []
 
@@ -38,7 +47,7 @@ def draw_callback_px(self, context):
     for each in planes:
         coords, indices = gizmo_helpers.plane_shape(each)
         batches.append((
-            batch_for_shader(shader, 'TRIS', {"pos": coords}, indices),
+            batch_for_shader(shader, 'TRIS', {"pos": coords}, indices=indices),
             plane_color,
             plane_nrml_inf
             ))
@@ -49,14 +58,18 @@ def draw_callback_px(self, context):
     for each in snap:
         coords, indices = gizmo_helpers.snap_shape(each)
         batches.append((
-            batch_for_shader(shader, 'TRIS', {"pos": coords}, indices),
+            batch_for_shader(shader, 'TRIS', {"pos": coords}, indices=indices),
             snap_color,
             snap_nrml_inf
             ))
 
     for batch, color, normal_shading in batches:
+        batch: gpu.types.GPUBatch
+        shader.bind()
+        shader.uniform_float("viewProjectionMatrix", matrix)
         shader.uniform_float("color", color)
         shader.uniform_float("normal_shading", normal_shading)
+        
         batch.draw(shader)
 
 class GizmoInstance(object):
@@ -73,7 +86,11 @@ class GizmoInstance(object):
 
     def term(self):
         """Terminate the instance"""
-        self.inst = self.inst.terminate() if self.inst else None
+        print('term')
+        try:
+            self.inst = self.inst.terminate() if self.inst else None
+        except ReferenceError:
+            pass
 
 GIZMO_INST = GizmoInstance()
 
@@ -82,7 +99,8 @@ class BL_OT_opengl_gizmos(bpy.types.Operator): # pylint: disable=invalid-name
     bl_idname = "opengl.helper_gizmos"
     bl_label = "OpenGL based Gizmos Renderer (Modal View3D Operator)"
     bl_category = "OpenGL"
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._handle = None
 
     def modal(self, context, event):

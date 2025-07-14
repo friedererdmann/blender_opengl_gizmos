@@ -5,36 +5,35 @@ import gpu
 def helper_shader():
     """Returns a GPU shader for viewport helper geometry"""
     vertex_shader = '''
-        uniform mat4 ModelViewProjectionMatrix;
-
-        in vec3 pos;
-        out vec3 position;
-        out vec3 ec_pos;
-
         void main()
         {
-            position = pos;
-            gl_Position = ModelViewProjectionMatrix * vec4(pos, 1.0f);
-            ec_pos = gl_Position.xyz;
+            vec4 Position = viewProjectionMatrix * vec4(pos, 1.0f);
+            ec_pos = Position.xyz;
         }
     '''
 
     fragment_shader = '''
-        uniform vec4 color;
-        uniform float normal_shading;
-
-        in vec3 position;
-        in vec3 ec_pos;
-
         void main()
         {
             vec3 ec_normal = normalize(cross(dFdx(ec_pos),dFdy(ec_pos)));//dFdx(world_pos), dFdy(world_pos));
             float shade = (ec_normal.x + ec_normal.y + ec_normal.z) / 3 + 1 - normal_shading;
             float cshade = clamp(shade, 0.0, 1.0);
-            gl_FragColor = vec4(cshade * color.xyz, color.w);
+            FragColor = vec4(cshade * color.xyz, 1.0);
         }
     '''
-    return gpu.types.GPUShader(vertex_shader, fragment_shader)
+    info = gpu.types.GPUShaderCreateInfo()
+    info.push_constant("MAT4", "viewProjectionMatrix")
+    info.push_constant("VEC4", "color")
+    info.push_constant("FLOAT", "normal_shading")
+    info.vertex_in(0, "VEC3", "pos")
+    vertex_out = gpu.types.GPUStageInterfaceInfo("vertex_out")
+    vertex_out.smooth("VEC3", "ec_pos")
+    info.vertex_out(vertex_out)
+    info.vertex_source(vertex_shader)
+    info.fragment_out(0, "VEC4", "FragColor")
+    info.fragment_source(fragment_shader)
+    
+    return gpu.shader.create_from_info(info)
 
 def multiply_vectors(vec_one, vec_two):
     """Helper function to multiply two mathutils vectors"""
